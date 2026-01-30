@@ -1,17 +1,17 @@
-import { run } from "uebersicht"
+import { React, run } from "uebersicht"
 
 export const command = "bash /Users/tadd/projects/thaddaeus/project-launcher-widget/get-projects.sh"
 export const refreshFrequency = 60000
 
 export const className = `
   position: fixed;
-  bottom: 20px;
+  top: 20px;
   left: 20px;
-  width: 320px;
+  width: 280px;
   max-height: 500px;
   background: rgba(30, 30, 30, 0.9);
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 8px;
+  padding: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: #ffffff;
@@ -24,95 +24,97 @@ export const className = `
   }
 
   .widget-title {
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(255, 255, 255, 0.5);
     text-transform: uppercase;
     letter-spacing: 1px;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   .project-list {
     overflow-y: auto;
-    max-height: 420px;
+    max-height: 450px;
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
   .project-list::-webkit-scrollbar {
-    width: 6px;
+    width: 4px;
   }
 
   .project-list::-webkit-scrollbar-track {
     background: rgba(255, 255, 255, 0.05);
-    border-radius: 3px;
+    border-radius: 2px;
   }
 
   .project-list::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.2);
-    border-radius: 3px;
+    border-radius: 2px;
   }
 
-  .project-list::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
+  .org-group {
+    margin-bottom: 2px;
+  }
+
+  .org-header {
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.4);
+    padding: 4px 6px 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 
   .project-item {
-    padding: 10px 12px;
-    margin-bottom: 4px;
-    border-radius: 8px;
+    padding: 5px 8px;
+    margin-bottom: 1px;
+    border-radius: 4px;
     cursor: pointer;
     transition: all 0.15s ease;
-    background: rgba(255, 255, 255, 0.03);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
 
   .project-item:hover {
     background: rgba(255, 255, 255, 0.1);
-    transform: translateX(4px);
   }
 
   .project-item:active {
     background: rgba(255, 255, 255, 0.15);
-    transform: translateX(4px) scale(0.98);
   }
 
   .project-name {
     font-family: "SF Mono", "Monaco", "Menlo", "Consolas", monospace;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
-    color: #ffffff;
-    margin-bottom: 4px;
-  }
-
-  .project-org {
-    color: rgba(255, 255, 255, 0.5);
-  }
-
-  .project-repo {
     color: #7dd3fc;
   }
 
   .project-date {
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.4);
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.85);
+    flex-shrink: 0;
+    margin-left: 8px;
   }
 
   .error-message {
     color: #f87171;
-    font-size: 12px;
-    padding: 12px;
+    font-size: 11px;
+    padding: 8px;
     background: rgba(248, 113, 113, 0.1);
-    border-radius: 8px;
+    border-radius: 4px;
   }
 
   .empty-message {
     color: rgba(255, 255, 255, 0.5);
-    font-size: 13px;
+    font-size: 12px;
     text-align: center;
-    padding: 24px 12px;
+    padding: 12px 8px;
   }
 `
 
@@ -132,7 +134,17 @@ const formatDate = (dateString) => {
 }
 
 const openProject = (projectPath) => {
-  run(`~/project-manager.sh -n "${projectPath}"`)
+  // Open Terminal, run script, then close that launcher window
+  run(`osascript -e '
+    tell application "Terminal"
+      set launcherTab to do script "/Users/tadd/project-manager.sh -n '"'"'${projectPath}'"'"'"
+      set launcherWindow to window 1 where its tab 1 is launcherTab
+      delay 3
+      close launcherWindow saving no
+    end tell
+  '`)
+    .then(output => console.log("Opened:", projectPath))
+    .catch(err => console.error("Error:", err))
 }
 
 export const render = ({ output, error }) => {
@@ -168,35 +180,44 @@ export const render = ({ output, error }) => {
     )
   }
 
+  // Group projects by org
+  const grouped = {}
+  projects.forEach(project => {
+    const org = project.org || "_none"
+    if (!grouped[org]) grouped[org] = []
+    grouped[org].push(project)
+  })
+
+  // Sort orgs alphabetically, with "_none" (no org) at the end
+  const sortedOrgs = Object.keys(grouped).sort((a, b) => {
+    if (a === "_none") return 1
+    if (b === "_none") return -1
+    return a.localeCompare(b)
+  })
+
   return (
     <div>
       <div className="widget-title">Projects</div>
-      <ul className="project-list">
-        {projects.map((project, index) => {
-          const hasOrg = project.org && project.org !== ""
-          const projectPath = hasOrg ? `${project.org}/${project.name}` : project.name
-
-          return (
-            <li
-              key={index}
-              className="project-item"
-              onClick={() => openProject(projectPath)}
-            >
-              <div className="project-name">
-                {hasOrg ? (
-                  <>
-                    <span className="project-org">{project.org}/</span>
-                    <span className="project-repo">{project.name}</span>
-                  </>
-                ) : (
-                  <span className="project-repo">{project.name}</span>
-                )}
-              </div>
-              <div className="project-date">{formatDate(project.lastUpdated)}</div>
-            </li>
-          )
-        })}
-      </ul>
+      <div className="project-list">
+        {sortedOrgs.map(org => (
+          <div key={org} className="org-group">
+            <div className="org-header">{org === "_none" ? "Other" : org}</div>
+            {grouped[org].map((project, index) => {
+              const projectPath = project.org ? `${project.org}/${project.name}` : project.name
+              return (
+                <div
+                  key={index}
+                  className="project-item"
+                  onClick={() => openProject(projectPath)}
+                >
+                  <span className="project-name">{project.name}</span>
+                  <span className="project-date">{formatDate(project.updated)}</span>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
