@@ -3,22 +3,23 @@
 # Project Launcher Widget - Installation Script
 # Installs the widget to Übersicht
 
-WIDGET_NAME="project-launcher.jsx"
+WIDGETS=("project-launcher.jsx" "github-issues.jsx")
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-WIDGET_SOURCE="$SCRIPT_DIR/$WIDGET_NAME"
 UBERSICHT_WIDGETS_DIR="$HOME/Library/Application Support/Übersicht/widgets"
 UBERSICHT_APP="/Applications/Übersicht.app"
 
-echo "Project Launcher Widget Installer"
+echo "Übersicht Widgets Installer"
 echo "=================================="
 echo
 
-# Check if widget source file exists
-if [ ! -f "$WIDGET_SOURCE" ]; then
-    echo "Error: $WIDGET_NAME not found in $SCRIPT_DIR"
-    echo "Please ensure you're running this script from the correct directory."
-    exit 1
-fi
+# Check if all widget source files exist
+for WIDGET_NAME in "${WIDGETS[@]}"; do
+    if [ ! -f "$SCRIPT_DIR/$WIDGET_NAME" ]; then
+        echo "Error: $WIDGET_NAME not found in $SCRIPT_DIR"
+        echo "Please ensure you're running this script from the correct directory."
+        exit 1
+    fi
+done
 
 # Check if Übersicht is installed
 if [ ! -d "$UBERSICHT_APP" ] && [ ! -d "$UBERSICHT_WIDGETS_DIR" ]; then
@@ -42,42 +43,52 @@ if [ ! -d "$UBERSICHT_WIDGETS_DIR" ]; then
     fi
 fi
 
-# Check if symlink or file already exists
-WIDGET_DEST="$UBERSICHT_WIDGETS_DIR/$WIDGET_NAME"
-if [ -L "$WIDGET_DEST" ]; then
-    echo "Removing existing symlink..."
-    rm "$WIDGET_DEST"
-elif [ -f "$WIDGET_DEST" ]; then
-    echo "Warning: A file (not symlink) already exists at $WIDGET_DEST"
-    read -p "Do you want to replace it? (y/n): " -n 1 -r
+# Install each widget
+installed=0
+for WIDGET_NAME in "${WIDGETS[@]}"; do
+    WIDGET_SOURCE="$SCRIPT_DIR/$WIDGET_NAME"
+    WIDGET_DEST="$UBERSICHT_WIDGETS_DIR/$WIDGET_NAME"
+
     echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo "Installing $WIDGET_NAME..."
+
+    if [ -L "$WIDGET_DEST" ]; then
+        echo "  Removing existing symlink..."
         rm "$WIDGET_DEST"
-    else
-        echo "Installation cancelled."
-        exit 1
+    elif [ -f "$WIDGET_DEST" ]; then
+        echo "  Warning: A file (not symlink) already exists at $WIDGET_DEST"
+        read -p "  Do you want to replace it? (y/n): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            rm "$WIDGET_DEST"
+        else
+            echo "  Skipped $WIDGET_NAME."
+            continue
+        fi
     fi
-fi
 
-# Create symlink
-echo "Creating symlink..."
-ln -s "$WIDGET_SOURCE" "$WIDGET_DEST"
+    ln -s "$WIDGET_SOURCE" "$WIDGET_DEST"
+    if [ $? -eq 0 ]; then
+        echo "  ✓ Symlinked $WIDGET_NAME"
+        installed=$((installed + 1))
+    else
+        echo "  Error: Failed to create symlink for $WIDGET_NAME"
+    fi
+done
 
-if [ $? -eq 0 ]; then
+if [ "$installed" -gt 0 ]; then
     echo
     echo "=================================="
-    echo "Installation successful!"
+    echo "Installation successful! ($installed widget(s))"
     echo "=================================="
     echo
     echo "Next steps:"
     echo "1. Open Übersicht (or restart it if already running)"
-    echo "2. The widget should appear automatically"
+    echo "2. The widgets should appear automatically"
     echo "3. If not visible, click the Übersicht menu bar icon"
-    echo "   and ensure 'project-launcher.jsx' is enabled"
-    echo
-    echo "Widget location: $WIDGET_DEST"
-    echo "Source location: $WIDGET_SOURCE"
+    echo "   and ensure the widgets are enabled"
 else
-    echo "Error: Failed to create symlink"
+    echo
+    echo "No widgets were installed."
     exit 1
 fi
